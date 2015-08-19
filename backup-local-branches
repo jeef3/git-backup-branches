@@ -1,0 +1,56 @@
+#!/bin/sh
+#
+# Creates a patch after each commit for use as a form of backup.
+#
+# Examples:
+# backup.dir "/Users/me/Dropbox/git-backup"
+# backup.master "incubator"
+# backup.ignore "master"
+
+# If there's no backup dir then there's no backup
+backupdir=$(git config backup.dir)
+if [ "$backupdir" = "" ]; then
+	echo "You must configure a backup directory:"
+	echo "git config --global repo.backupdir /my/backup/directory"
+	echo "or"
+	echo "git config --local repo.backupdir /my/backup/directory"
+
+	exit 1
+fi
+
+# Get the master branch to diff against
+masterBranch=$(git config backup.master)
+if [ "$masterBranch" = "" ]; then
+	masterBranch="master"
+fi
+
+# Get local branches to backup
+branches=( $(git for-each-ref --format="%(refname:short)" refs/heads/) )
+
+# There's no need to backup the specified master branch
+branches=( ${branches[@]//$masterBranch/} )
+
+# Remove ignored branches
+ignore=( $(git config backup.ignore) )
+for b in ${ignore[@]}; do
+	branches=( ${branches[@]//$b/} )
+done
+
+# Backup function
+function backupBranch {
+	echo "Writing: $backupdir/$1.patch"
+	git diff $masterBranch..$1 > "$backupdir/$1.patch"
+}
+
+echo
+echo "============================= Backing up branches =============================="
+echo "Diffing branches against ($masterBranch)"
+echo "Saving too: $backupdir"
+echo
+
+for b in ${branches[@]}; do
+	backupBranch $b
+done
+
+echo
+echo "================================================================================"
